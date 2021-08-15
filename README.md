@@ -9,7 +9,8 @@ cd PendulumModel
 
 
 Create and activate a new virtual environment. 
-```python3 -m venv pendulumenv
+```
+python3 -m venv pendulumenv
 . pendulumenv/bin/activate
 ```
 Ensure that each line in your terminal is now prefixed with (pendulumenv), indicating the virtual environment is active. 
