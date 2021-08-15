@@ -3,7 +3,7 @@ Pendulum model simulation for MTH3310 Assignment.
 
 Clone the repository:
 ```
-git clone https://github.com/acol0005/PendulumModel.git`
+git clone https://github.com/acol0005/PendulumModel.git
 cd PendulumModel
 ```
 
