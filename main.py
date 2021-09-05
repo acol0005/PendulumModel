@@ -194,35 +194,6 @@ class Pendulum:
         term3 = self.g*l2*m2*np.cos(theta_2)
         return term1 + term2 + term3
 
-    def animate_solution(self, df):
-        x1 = self.linkages[0].l * np.sin(df.theta1.values)
-        y1 = -self.linkages[0].l * np.cos(df.theta1.values)
-
-        x2 = self.linkages[1].l * np.sin(df.theta2.values) + x1
-        y2 = -self.linkages[1].l * np.cos(df.theta2.values) + y1
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, autoscale_on=False)
-        ax.set_aspect('equal')
-        ax.grid()
-
-        line, = ax.plot([], [], 'o-', lw=2)
-        dt = df.time.diff().mean()
-        def init():
-            line.set_data([], [])
-            return line
-
-        def animate(i):
-            thisx = [0, x1[i], x2[i]]
-            thisy = [0, y1[i], y2[i]]
-
-            line.set_data(thisx, thisy)
-            return line
-
-        ani = animation.FuncAnimation(fig, animate, range(1, len(df)),
-                                      interval=dt * 1000, blit=True, init_func=init)
-        return ani
-
     def plot_linkage_position(self, linkage_num, ax=None):
         if not ax:
             fig, ax = plt.subplots()
@@ -251,7 +222,107 @@ class Pendulum:
             self.plot_linkage_velocity(i + 1, axs[1, i])
         return fig, axs
 
+class PendulumPlotter:
+    def __init__(self, pendulum, ax):
+        self.is_triple = len(pendulum) == 3
+        self.pendulum = pendulum
 
+        self.L = sum(linkage.l for linkage in pendulum.linkages)
+        self.x1 = pendulum.linkages[0].l * np.sin(pendulum.df.theta1.values)
+        self.y1 = -pendulum.linkages[0].l * np.cos(pendulum.df.theta1.values)
+
+        self.x2 = pendulum.linkages[1].l * np.sin(pendulum.df.theta2.values) + self.x1
+        self.y2 = -pendulum.linkages[1].l * np.cos(pendulum.df.theta2.values) + self.y1
+
+        self.dt = pendulum.df.time.diff().mean()
+
+        self.ax = ax
+        self.fig = ax.get_figure()
+        ax.set_xlim([-self.L, self.L])
+        ax.set_ylim([-self.L, self.L])
+        ax.set_aspect('equal')
+        ax.grid()
+
+        self.line, = ax.plot([], [], 'o-', lw=2)
+        self.trace1 = ax.scatter([self.x1[0]], [self.y1[0]], cmap=plt.get_cmap('Greens'), alpha=0.5)
+        self.trace2 = ax.scatter([self.x2[0]], [self.y2[0]], cmap=plt.get_cmap('Oranges'), alpha=0.5)
+
+        self.time_template = 'time = %.1fs'
+        self.time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+        self.history_len = 500
+        self.history_x_1, self.history_y_1 = deque(maxlen=self.history_len), deque(maxlen=self.history_len)
+        self.history_x_2, self.history_y_2 = deque(maxlen=self.history_len), deque(maxlen=self.history_len)
+
+        if self.is_triple:
+            self.x3 = pendulum.linkages[2].l * np.sin(pendulum.df.theta3.values) + self.x2
+            self.y3 = -pendulum.linkages[2].l * np.cos(pendulum.df.theta3.values) + self.y2
+            self.trace3 = ax.scatter([self.x3[0]], [self.y3[0]], cmap=plt.get_cmap('Blues'), alpha=0.5)
+            self.history_x_3, self.history_y_3 = deque(maxlen=self.history_len), deque(maxlen=self.history_len)
+
+
+    def get_return_val(self):
+        if self.is_triple:
+            return self.line, self.trace1, self.trace2, self.trace3, self.time_text
+        return self.line, self.trace1, self.trace2, self.time_text
+
+def animate_solution(pendulums):
+    """
+    Animates physical position of one or more pendulums. Can pass either a single instance of a Pendulum or a list of pendulms.
+    Additional pendulums will be animated on subplots
+    :param pendulums: (list) List of pendulums to animate. Can be a single element list
+    :return:
+    """
+
+
+    fig, axs = plt.subplots(len(pendulums))
+    pendulum_plotters = [PendulumPlotter(pendulum, ax) for pendulum, ax in zip(pendulums, axs)]
+    def animate(i):
+        for plotter in pendulum_plotters:
+            thisx = [0, plotter.x1[i], plotter.x2[i], plotter.x3[i]]
+            thisy = [0, plotter.y1[i], plotter.y2[i], plotter.y3[i]]
+
+            if i == 0:
+                plotter.history_x_1.clear()
+                plotter.history_y_1.clear()
+                plotter.history_x_2.clear()
+                plotter.history_y_2.clear()
+                if plotter.is_triple:
+                    plotter.history_x_3.clear()
+                    plotter.history_y_3.clear()
+
+            plotter.history_x_1.appendleft(thisx[1])
+            plotter.history_y_1.appendleft(thisy[1])
+            plotter.history_x_2.appendleft(thisx[2])
+            plotter.history_y_2.appendleft(thisy[2])
+
+            plotter.line.set_data(thisx, thisy)
+            plotter.trace1.set_offsets(np.c_[plotter.history_x_1, plotter.history_y_1])
+            plotter.trace1.set_cmap('Greens')
+            plotter.trace1.set_clim(0, 1)
+            plotter.trace1.set_sizes(1.0 * np.ones(len(plotter.history_x_1)))
+            plotter.trace1.set_array(np.linspace(1, 0, len(plotter.history_x_1)))
+
+            plotter.trace2.set_offsets(np.c_[plotter.history_x_2, plotter.history_y_2])
+            plotter.trace2.set_cmap('Oranges')
+            plotter.trace2.set_clim(0, 1)
+            plotter.trace2.set_sizes(1.0 * np.ones(len(plotter.history_x_2)))
+            plotter.trace2.set_array(np.linspace(1, 0, len(plotter.history_x_2)))
+
+            if plotter.is_triple:
+                plotter.history_x_3.appendleft(thisx[3])
+                plotter.history_y_3.appendleft(thisy[3])
+                plotter.trace3.set_offsets(np.c_[plotter.history_x_3, plotter.history_y_3])
+                plotter.trace3.set_cmap('Blues')
+                plotter.trace3.set_clim(0, 1)
+                plotter.trace3.set_sizes(1.0 * np.ones(len(plotter.history_x_3)))
+                plotter.trace3.set_array(np.linspace(1, 0, len(plotter.history_x_3)))
+
+            plotter.time_text.set_text(plotter.time_template % (i * plotter.dt))
+        return (plotter.get_return_val() for plotter in pendulum_plotters)
+
+    ani = animation.FuncAnimation(
+        fig, animate, len(pendulum_plotters[0].pendulum.df), interval=pendulum_plotters[0].dt * 500, blit=True)
+    return ani
 
 if __name__ == '__main__':
     linkage_1 = Linkage(3, 2, np.pi / 4, 0)
