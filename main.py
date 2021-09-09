@@ -77,16 +77,10 @@ class Pendulum:
         l_1 = self.linkages[0].l
         l_2 = self.linkages[1].l
         l_3 = self.linkages[2].l
-        m_11 = self.linkages[0].m_arm
-        m_12 = self.linkages[0].m
-        m_21 = self.linkages[1].m_arm
-        m_22 = self.linkages[1].m
-        m_31 = self.linkages[2].m_arm
-        m_32 = self.linkages[2].m
+        m_1 = self.linkages[0].m
+        m_2 = self.linkages[1].m
+        m_3 = self.linkages[2].m
 
-        M_1 = (m_11 / 2 + m_12) / (m_11 + m_12)
-        M_2 = (m_21 / 2 + m_22) / (m_21 + m_22)
-        M_3 = (m_31 / 2 + m_32) / (m_31 + m_32)
 
         def rhs_func(t, y):
             rhs = np.zeros(len(self) * 2)
@@ -98,48 +92,43 @@ class Pendulum:
             omega_3 = y[5]
             g = self.g
 
-            A11 = (l_1 ** 2) * ((4 * (m_11 + m_12) * ( M_1 ** 2) / 3) + 0.5*m_21 + m_22 + m_31 + m_32)
-            A12 = l_1 * l_2 * np.cos(theta_1 - theta_2) * (m_21 / 2 + m_22 + m_31 + m_32) / 2
-            A13 = l_1 * l_3 * M_3 * np.cos(theta_1 - theta_3)
+            A11 = l_1 ** 2 * (m_1/3 + m_2 + m_3)
+            A12 = (m_2/4 + m_3/2)*l_1*l_2*np.cos(theta_1 - theta_2)
+            A13 = m_3*l_1*l_3 / 4 * np.cos(theta_1 - theta_3)
 
-            A21 = l_1 * l_2 * np.cos(theta_1 - theta_2) * (m_21 / 2 + m_22 + m_31 + m_32) / 2
-            A22_term_1 = (m_21 + m_22) / 3
-            A22_term_2 = l_1 ** 2 + l_2 ** 2 + M_2 ** 2 + + (M_2  * l_2) ** 2 / 3 + M_2 * l_1 * l_2 * np.cos(theta_1 - theta_2)
-            A22_term_3 = l_2 ** 2 * (m_11 + m_21)
-            A22 = A22_term_1 * A22_term_2 + A22_term_3
-            A23 = (m_31 / 2 + m_32) * l_2 * l_3 * np.cos(theta_2 - theta_3) / 2
+            A21 = A12
+            A22 = m_2*(2*l_1**2/3 + l_1*l_2/6*np.cos(theta_1 - theta_2)) + m_3*l_2**2
+            A23 = m_3*l_2*l_3/4*np.cos(theta_2 - theta_3)
 
-            A31 = (m_31 / 2 + m_32) * l_1 * l_3 * np.cos(theta_1 - theta_3) / 2
-            A32 = (m_31 / 2 + m_32) * l_2 * l_3 * np.cos(theta_2 - theta_3) / 2
+            A31 = A13
+            A32 = A23
+            A33 = m_3/3*(l_1**2 + l_2**2 + l_3**2 + 3*l_1*l_2/2*np.cos(theta_1 - theta_3) + l_2*l_3/2*np.cos(theta_2-theta_3))
 
-            A33_term_1 = (m_31 + m_32)
-            A33_term_2 = l_1**2 + l_2**2 + 2*(M_3*l_3)**2 + l_1*l_2*np.cos(theta_1 - theta_2) + M_3*l_1*l_3*np.cos(theta_1 - theta_3) + \
-                         M_3*l_2*l_3*np.cos(theta_2 - theta_3)
-            A33 = A33_term_1*A33_term_2
-
-            A = np.array([[A11, A12, A13], [A21, A22, A23], [A31, A32, A33]])
-            theta_dots = np.linalg.solve(A, np.array([[omega_1], [omega_2], [omega_3]]))
+            A = [[A11, A12, A13], [A21, A22, A23], [A31, A32, A33]]
+            theta_dots = np.linalg.solve(A, np.array([omega_1, omega_2, omega_3]).reshape(-1, 1))
             theta_dot_1 = theta_dots[0]
             theta_dot_2 = theta_dots[1]
             theta_dot_3 = theta_dots[2]
 
-            wdot_1_term_1 = -l_1*g*np.sin(theta_1)*(0.5*m_11 + m_12 + m_21 + m_22 + m_31 + m_32)
-            wdot_1_term_2 = l_1*l_2*np.sin(theta_1 - theta_2)*((0.5*m_11 + m_22)*(theta_dot_1*theta_dot_2 + theta_dot_2 ** 2 / 3) +
-                                                               (m_31 + m_32)*(theta_dot_1*theta_dot_2 + theta_dot_3 ** 2 / 3))
-            wdot_1_term_3 = l_1*l_3*np.sin(theta_1 - theta_3)*(0.5*m_31 + m_32)*(theta_dot_1*theta_dot_2 + theta_dot_3 ** 2 / 3)
-            wdot_1 = wdot_1_term_1 - 0.5*(wdot_1_term_2 + wdot_1_term_3)
+            wdot_1_term_1 = -l_1*l_2 / 4 * np.sin(theta_1 - theta_2)
+            wdot_1_term_2 = m_1*(theta_dot_1**2 / 3 + theta_dot_1*theta_dot_2)
+            wdot_1_term_3 = -m_3*l_1*l_3/4 * np.sin(theta_1 - theta_3)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 /3 )
+            wdot_1_term_4 = -g*l_1*np.sin(theta_1)*(m_1/2 + m_2 + m_3)
 
-            wdot_2_term_1 = -l_2*g*np.sin(theta_2)*(0.5*m_21 + m_22 + m_31 + m_32)
-            wdot_2_term_2 = l_1*l_2*np.sin(theta_1 - theta_2)*((0.5*m_21 + m_22)*(theta_dot_1*theta_dot_2 + theta_dot_2 ** 2 / 3) +
-                                                               (m_31 + m_32)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 / 3))
-            wdot_2_term_3 = l_2*l_3*np.sin(theta_2 - theta_3)*(0.5*m_31 + m_32)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2 / 3)
-            wdot_2 = wdot_2_term_1 + 0.5*(wdot_2_term_2 - wdot_2_term_3)
+            wdot_1 = wdot_1_term_1*wdot_1_term_2 + wdot_1_term_3 + wdot_1_term_4
 
-            wdot_3_term_1 = -l_3*(0.5*m_31 + m_32)
-            wdot_3_term_2 = g*np.sin(theta_3)
-            wdot_3_term_3 = 0.5*(l_1*np.sin(theta_1 - theta_3)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 / 3) +
-                                 l_2*np.sin(theta_2 - theta_3)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2 / 3))
-            wdot_3 = wdot_3_term_1 * (wdot_3_term_2 + wdot_3_term_3)
+            wdot_2_term_1 = l_1*l_2/4*np.sin(theta_1 - theta_2)
+            wdot_2_term_2 = m_1*(theta_2 **2 / 3 + theta_dot_1*theta_dot_2) + m_3*(theta_dot_3 ** 2/3 + theta_dot_1*theta_dot_2)
+            wdot_2_term_3 = -m_3*l_2*l_3/4*np.sin(theta_2 - theta_3)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2 /3)
+            wdot_2_term_4 = -g*l_2*np.sin(theta_2)*(m_2/2 + m_3)
+
+            wdot_2 = wdot_2_term_1*wdot_2_term_2 + wdot_2_term_3 + wdot_2_term_4
+
+            wdot_3_term_1 = m_3/4 * (l_1*l_3*np.sin(theta_1 - theta_3)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 /3))
+            wdot_3_term_2 = l_2*l_3*np.sin(theta_2 - theta_3)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2/3)
+            wdot_3_term_3 = -g*m_3/2*np.sin(theta_3)
+
+            wdot_3 = wdot_3_term_1 + wdot_3_term_2 + wdot_3_term_3
 
             rhs[0] = theta_dot_1
             rhs[1] = theta_dot_2
@@ -318,7 +307,7 @@ def animate_solution(pendulums):
                 plotter.trace3.set_array(np.linspace(1, 0, len(plotter.history_x_3)))
 
             plotter.time_text.set_text(plotter.time_template % (i * plotter.dt))
-        return (plotter.get_return_val() for plotter in pendulum_plotters)
+        return (element for plotter in pendulum_plotters for element in plotter.get_return_val())
 
     ani = animation.FuncAnimation(
         fig, animate, len(pendulum_plotters[0].pendulum.df), interval=pendulum_plotters[0].dt * 500, blit=True)

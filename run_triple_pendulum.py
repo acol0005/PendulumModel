@@ -11,7 +11,7 @@ from collections import deque
 if __name__ == '__main__':
     linkage_1 = Linkage(1, 1, np.pi / 2, 0)
     linkage_2 = Linkage(1, 1, np.pi / 2, 0)
-    linkage_3 = Linkage(1, 1, 0, 0)
+    linkage_3 = Linkage(0.001, 1, 0, 0)
     modified_linkage_3 = Linkage(1, 1, np.deg2rad(1), 0)
     pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1)
     modified_pendulum = Pendulum([linkage_1, linkage_2, modified_linkage_3], 1)
