@@ -25,9 +25,10 @@ class Linkage:
 
 
 class Pendulum:
-    def __init__(self, linkage_list, g):
+    def __init__(self, linkage_list, g, t_end):
         self.linkages = linkage_list
         self.g = g
+        self.t_end = t_end
         self.solution = None
         self.df = None
 
@@ -90,6 +91,8 @@ class Pendulum:
             omega_1 = y[3]
             omega_2 = y[4]
             omega_3 = y[5]
+
+            omega = np.array([[omega_1], [omega_2], [omega_3]])
             g = self.g
 
             A11 = l_1 ** 2 * (m_1/3 + m_2 + m_3)
@@ -97,45 +100,60 @@ class Pendulum:
             A13 = m_3*l_1*l_3 / 4 * np.cos(theta_1 - theta_3)
 
             A21 = A12
-            A22 = m_2*(2*l_1**2/3 + l_1*l_2/6*np.cos(theta_1 - theta_2)) + m_3*l_2**2
+            A22 = m_2*(l_1**2/3 + l_2**2/3 + l_1*l_2/6*np.cos(theta_1 - theta_2)) + m_3*l_2**2
             A23 = m_3*l_2*l_3/4*np.cos(theta_2 - theta_3)
 
             A31 = A13
             A32 = A23
-            A33 = m_3/3*(l_1**2 + l_2**2 + l_3**2 + 3*l_1*l_2/2*np.cos(theta_1 - theta_3) + l_2*l_3/2*np.cos(theta_2-theta_3))
+            A33 = m_3/3*(l_1**2 + l_2**2 + l_3**2 + l_1*l_2*np.cos(theta_1 - theta_2) + l_1*l_3/2*np.cos(theta_1-theta_3) + l_2*l_3/2*np.cos(theta_2-theta_3))
 
             A = [[A11, A12, A13], [A21, A22, A23], [A31, A32, A33]]
-            theta_dots = np.linalg.solve(A, np.array([omega_1, omega_2, omega_3]).reshape(-1, 1))
-            theta_dot_1 = theta_dots[0]
-            theta_dot_2 = theta_dots[1]
-            theta_dot_3 = theta_dots[2]
 
-            wdot_1_term_1 = -l_1*l_2 / 4 * np.sin(theta_1 - theta_2)
-            wdot_1_term_2 = m_1*(theta_dot_1**2 / 3 + theta_dot_1*theta_dot_2)
-            wdot_1_term_3 = -m_3*l_1*l_3/4 * np.sin(theta_1 - theta_3)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 /3 )
-            wdot_1_term_4 = -g*l_1*np.sin(theta_1)*(m_1/2 + m_2 + m_3)
 
-            wdot_1 = wdot_1_term_1*wdot_1_term_2 + wdot_1_term_3 + wdot_1_term_4
+            dAdt11 = 0
+            dAdt12 = -(m_2/4 + m_3/2)*l_1*l_2*(omega_1 - omega_2)*np.sin(theta_1 - theta_2)
+            dAdt13 = -m_3*l_1*l_3/4*(omega_1 - omega_3)*np.sin(theta_1 - theta_3)
 
-            wdot_2_term_1 = l_1*l_2/4*np.sin(theta_1 - theta_2)
-            wdot_2_term_2 = m_1*(theta_2 **2 / 3 + theta_dot_1*theta_dot_2) + m_3*(theta_dot_3 ** 2/3 + theta_dot_1*theta_dot_2)
-            wdot_2_term_3 = -m_3*l_2*l_3/4*np.sin(theta_2 - theta_3)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2 /3)
-            wdot_2_term_4 = -g*l_2*np.sin(theta_2)*(m_2/2 + m_3)
+            dAdt21 = dAdt12
+            dAdt22 = -m_2*l_1*l_2/6*(omega_1 - omega_2)*np.sin(theta_1 - theta_2)
+            dAdt23 = -m_3*l_2*l_3/4*(omega_2 - omega_3)*np.sin(theta_2 - theta_3)
 
-            wdot_2 = wdot_2_term_1*wdot_2_term_2 + wdot_2_term_3 + wdot_2_term_4
+            dAdt31 = dAdt13
+            dAdt32 = dAdt23
+            dAdt33 = -m_3/3*(l_1*l_2*(omega_1 - omega_2)*np.sin(theta_1 - theta_2) + l_1*l_3/2*(omega_1 - omega_3)*np.sin(theta_1 - theta_3)
+                              + l_2*l_3/2*(omega_2 - omega_3)*np.sin(theta_2 - theta_3))
 
-            wdot_3_term_1 = m_3/4 * (l_1*l_3*np.sin(theta_1 - theta_3)*(theta_dot_1*theta_dot_3 + theta_dot_3 ** 2 /3))
-            wdot_3_term_2 = l_2*l_3*np.sin(theta_2 - theta_3)*(theta_dot_2*theta_dot_3 + theta_dot_3 ** 2/3)
-            wdot_3_term_3 = -g*m_3/2*np.sin(theta_3)
+            dAdt = [[dAdt11, dAdt12, dAdt13], [dAdt21, dAdt22, dAdt23], [dAdt31, dAdt32, dAdt33]]
 
-            wdot_3 = wdot_3_term_1 + wdot_3_term_2 + wdot_3_term_3
+            dldth_1_term_1 = -l_1*l_2 / 4 * np.sin(theta_1 - theta_2)
+            dldth_1_term_2 = m_2*(omega_2**2 / 3 + omega_1*omega_2) + 2*m_3*(omega_1*omega_2 + omega_3**2/3)
+            dldth_1_term_3 = -m_3*l_1*l_3/4 * np.sin(theta_1 - theta_3)*(omega_1*omega_3 + omega_3 ** 2 /3)
+            dldth_1_term_4 = -g*l_1*np.sin(theta_1)*(m_1/2 + m_2 + m_3)
 
-            rhs[0] = theta_dot_1
-            rhs[1] = theta_dot_2
-            rhs[2] = theta_dot_3
-            rhs[3] = wdot_1
-            rhs[4] = wdot_2
-            rhs[5] = wdot_3
+            dldth_1 = dldth_1_term_1*dldth_1_term_2 + dldth_1_term_3 + dldth_1_term_4
+
+            dldth_2_term_1 = l_1*l_2/4*np.sin(theta_1 - theta_2)
+            dldth_2_term_2 = m_2*(omega_2 **2 / 3 + omega_1*omega_2) + 2*m_3*(omega_3 ** 2/3 + omega_1*omega_2)
+            dldth_2_term_3 = -m_3*l_2*l_3/4*np.sin(theta_2 - theta_3)*(omega_2*omega_3 + omega_3 ** 2 /3)
+            dldth_2_term_4 = -g*l_2*np.sin(theta_2)*(m_2/2 + m_3)
+
+            dldth_2 = dldth_2_term_1*dldth_2_term_2 + dldth_2_term_3 + dldth_2_term_4
+
+            dldth_3_term_1 = m_3/4 * (l_1*l_3*np.sin(theta_1 - theta_3)*(omega_1*omega_3 + omega_3 ** 2 /3))
+            dldth_3_term_2 = m_3/4 * l_2*l_3*np.sin(theta_2 - theta_3)*(omega_2*omega_3 + omega_3 ** 2/3)
+            dldth_3_term_3 = -g*m_3*l_3/2*np.sin(theta_3)
+
+            dldth_3 = dldth_3_term_1 + dldth_3_term_2 + dldth_3_term_3
+            dldth = np.array([[dldth_1], [dldth_2], [dldth_3]])
+
+            omega_dot = np.linalg.solve(A, dldth - dAdt*omega)
+
+            rhs[0] = omega_1
+            rhs[1] = omega_2
+            rhs[2] = omega_3
+            rhs[3] = omega_dot[0, 0]
+            rhs[4] = omega_dot[1, 0]
+            rhs[5] = omega_dot[2, 0]
             return rhs
         return rhs_func
 
@@ -147,9 +165,9 @@ class Pendulum:
         else:
             raise ValueError(f'Unavailable number of linkages ({len(self)}). Must be 2 or 3')
 
-    def solve(self, t_end, method='RK45'):
+    def solve(self, method='RK45'):
         y0 = np.array([linkage.theta for linkage in self.linkages] + [linkage.omega for linkage in self.linkages])
-        t_bound = (0, t_end)
+        t_bound = (0, self.t_end)
         ode_solution = integrate.solve_ivp(self.get_ode_rhs(), t_bound, y0, method=method, max_step=0.1)
         ode_solution.y_degrees = np.rad2deg(ode_solution.y)
 
@@ -169,18 +187,33 @@ class Pendulum:
     def calculate_energy(self, solution):
         l1 = self.linkages[0].l
         l2 = self.linkages[1].l
+        l3 = self.linkages[2].l
         m1 = self.linkages[0].m
         m2 = self.linkages[1].m
+        m3 = self.linkages[2].m
 
         theta_1 = solution.y[0, :]
         theta_2 = solution.y[1, :]
-        omega_1 = solution.y[2, :]
-        omega_2 = solution.y[3, :]
+        theta_3 = solution.y[2, :]
+        omega_1 = solution.y[3, :]
+        omega_2 = solution.y[4, :]
+        omega_3 = solution.y[5, :]
 
-        term1 = 0.5 * (l1**2*(m1 + m2)*omega_1**2 + l2**2*m2*omega_2**2 +
-                       2*l1*l2*m2*np.cos(theta_1 - theta_2)*omega_1*omega_2)
-        term2 = self.g*l1*(m1 + m2)*np.cos(theta_1)
-        term3 = self.g*l2*m2*np.cos(theta_2)
+        g = self.g
+
+        mass_1_term_1 = m1*(0.5*l1**2 * omega_1**2 / 3 - 0.5*g*l1*np.cos(theta_1))
+        term1 = mass_1_term_1
+
+        mass_2_term_1 = 0.5*m2*(l1**2*(omega_1**2 + omega_2**2/3) + l2**2*omega_2**2/3 + 0.5*l1*l2*np.cos(theta_1 - theta_2)*(omega_2**2/3 + omega_1*omega_2))
+        mass_2_term_2 = -g*m2*(l1*(np.cos(theta_1) + 0.5*l2*np.cos(theta_2)))
+
+        term2 = mass_2_term_1 + mass_2_term_2
+
+        mass_3_term_1 = 0.5*m3*(l1**2*(omega_1**2 + omega_3**2/3) + l2**2*(omega_2**2 + omega_3**2/3) + l3**2*omega_3**2/3)
+        mass_3_term_2 = 0.5*m3*(l1*l2*np.cos(theta_1 - theta_2)*(omega_1*omega_2 + omega_3**2/3) + 0.5*l1*l3*np.cos(theta_1 - theta_3)*(omega_1*omega_3 + omega_3**2/3) +
+                                0.5*l2*l3*np.cos(theta_2 - theta_3)*(omega_2*omega_3 + omega_3**2/3))
+        mass_3_term_3 = -g*m3*(l1*np.cos(theta_1) + l2*np.cos(theta_2) + 0.5*l3*np.cos(theta_3))
+        term3 = mass_3_term_1 + mass_3_term_2 + mass_3_term_3
         return term1 + term2 + term3
 
     def plot_linkage_position(self, linkage_num, ax=None):
@@ -200,6 +233,16 @@ class Pendulum:
         ax.plot(self.df.time, self.df[f'omega{linkage_num}_deg'])
         ax.set_xlabel('Time')
         ax.set_ylabel(f'Angular Velocity of Linkage {linkage_num}')
+        ax.grid()
+        return ax
+
+    def plot_energy(self):
+        self.df['energy'] = self.calculate_energy(self.solution)
+        fig, ax = plt.subplots()
+
+        ax.plot(self.df.time, self.df.energy)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Energy')
         ax.grid()
         return ax
 
@@ -264,6 +307,8 @@ def animate_solution(pendulums):
 
 
     fig, axs = plt.subplots(len(pendulums))
+    if len(pendulums) == 1:
+        axs = [axs]
     pendulum_plotters = [PendulumPlotter(pendulum, ax) for pendulum, ax in zip(pendulums, axs)]
     def animate(i):
         for plotter in pendulum_plotters:
@@ -314,109 +359,18 @@ def animate_solution(pendulums):
     return ani
 
 if __name__ == '__main__':
-    linkage_1 = Linkage(3, 2, np.pi / 4, 0)
-    linkage_2 = Linkage(1, 1, np.pi / 4, 0)
-    pendulum = Pendulum([linkage_1, linkage_2], 1)
-    solution, df = pendulum.solve(100)
+    linkage_1 = Linkage(1, 1, np.pi / 2, 0)
+    linkage_2 = Linkage(1, 1, np.pi / 2, 0)
+    linkage_3 = Linkage(1, 1, np.pi / 2, 0)
+    pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, 20)
+    solution, df = pendulum.solve()
 
-    fig, axs = plt.subplots(2, 2)
-
-    axs[0, 0].plot(solution.t, solution.y_degrees[0, :])
-    axs[0, 0].set_xlabel('Time')
-    axs[0, 0].set_ylabel('Angular Position of Linkage 1')
-    axs[0, 0].grid()
-
-    axs[0, 1].plot(solution.t, solution.y_degrees[1, :])
-    axs[0, 1].set_xlabel('Time')
-    axs[0, 1].set_ylabel('Angular Position of Linkage 2')
-    axs[0, 1].grid()
-
-    axs[1, 0].plot(solution.t, solution.y_degrees[2, :])
-    axs[1, 0].set_xlabel('Time')
-    axs[1, 0].set_ylabel('Angular Velocity of Linkage 1')
-    axs[1, 0].grid()
-
-    axs[1, 1].plot(solution.t, solution.y_degrees[3, :])
-    axs[1, 1].set_xlabel('Time')
-    axs[1, 1].set_ylabel('Angular Velocity of Linkage 2')
-    axs[1, 1].grid()
-
-    energy = pendulum.calculate_energy(solution)
-    _, ax = plt.subplots()
-    ax.plot(solution.t, energy)
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Energy')
-    ax.grid()
-
-    _, ax = plt.subplots()
-    ax.plot(solution.y_degrees[2, :], solution.y_degrees[0, :])
-    ax.set_xlabel('Angular Velocity of Linkage 1')
-    ax.set_ylabel('Angular Position of Linkage 1')
-    ax.grid()
-
-    _, ax = plt.subplots()
-    ax.plot(solution.y_degrees[3, :], solution.y_degrees[1, :])
-    ax.set_xlabel('Angular Velocity of Linkage 2')
-    ax.set_ylabel('Angular Position of Linkage 2')
-    ax.grid()
-
-    _, ax = plt.subplots()
-    ax.plot(solution.y_degrees[0, :], solution.y_degrees[1, :])
-    ax.set_xlabel('Angular Position of Linkage 1')
-    ax.set_ylabel('Angular Position of Linkage 2')
-    ax.grid()
-    ax.set_aspect('equal')
-
-    _, ax = plt.subplots()
-    ax.plot(solution.y_degrees[2, :], solution.y_degrees[3, :])
-    ax.set_xlabel('Angular Velocity of Linkage 1')
-    ax.set_ylabel('Angular Velocity of Linkage 2')
-    ax.grid()
-    ax.set_aspect('equal')
-
-
-    # ani = pendulum.animate_solution(df)
-    L = sum(linkage.l for linkage in pendulum.linkages)
-    x1 = pendulum.linkages[0].l * np.sin(df.theta1.values)
-    y1 = -pendulum.linkages[0].l * np.cos(df.theta1.values)
-
-    x2 = pendulum.linkages[1].l * np.sin(df.theta2.values) + x1
-    y2 = -pendulum.linkages[1].l * np.cos(df.theta2.values) + y1
-    dt = df.time.diff().mean()
-    fig = plt.figure(figsize=(5, 4))
-    ax = fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, 1.))
-    ax.set_aspect('equal')
-    ax.grid()
-
-    line, = ax.plot([], [], 'o-', lw=2)
-    trace, = ax.plot([], [], ',-', lw=1)
-    time_template = 'time = %.1fs'
-    time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
-    history_len = 500
-    history_x, history_y = deque(maxlen=history_len), deque(maxlen=history_len)
-
-
-    def animate(i):
-        thisx = [0, x1[i], x2[i]]
-        thisy = [0, y1[i], y2[i]]
-
-        if i == 0:
-            history_x.clear()
-            history_y.clear()
-
-        history_x.appendleft(thisx[2])
-        history_y.appendleft(thisy[2])
-
-        line.set_data(thisx, thisy)
-        trace.set_data(history_x, history_y)
-        time_text.set_text(time_template % (i * dt))
-        return line, trace, time_text
-
-
-    ani = animation.FuncAnimation(
-        fig, animate, len(df), interval=dt * 100, blit=True)
-    ani.save('pendulum.mp4')
+    pendulum.plot_all_linkage_variables()
+    pendulum.plot_energy()
+    ani = animate_solution([pendulum])
     plt.show()
+
+
 
 
 
