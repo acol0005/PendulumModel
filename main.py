@@ -8,7 +8,7 @@ from collections import deque
 
 
 class Linkage:
-    def __init__(self, mass_ball, length, initial_angle, initial_angular_velocity, mass_arm=0):
+    def __init__(self, mass_ball, length, initial_angle, initial_angular_velocity, mass_arm=0, point_mass=False):
         """
         Class representing a single linkage of a pendulum.
         :param mass_ball: (float) Mass at the end of the pendulum
@@ -24,13 +24,15 @@ class Linkage:
         self.omega = initial_angular_velocity
 
 
+
 class Pendulum:
-    def __init__(self, linkage_list, g, t_end):
+    def __init__(self, linkage_list, g, t_end, point_mass=False):
         self.linkages = linkage_list
         self.g = g
         self.t_end = t_end
         self.solution = None
         self.df = None
+        self.point_mass = point_mass
 
     def __len__(self):
         return len(self.linkages)
@@ -146,7 +148,7 @@ class Pendulum:
             dldth_3 = dldth_3_term_1 + dldth_3_term_2 + dldth_3_term_3
             dldth = np.array([[dldth_1], [dldth_2], [dldth_3]])
 
-            omega_dot = np.linalg.solve(A, dldth - dAdt*omega)
+            omega_dot = np.linalg.solve(A, dldth - dAdt @ omega)
 
             rhs[0] = omega_1
             rhs[1] = omega_2
@@ -155,7 +157,67 @@ class Pendulum:
             rhs[4] = omega_dot[1, 0]
             rhs[5] = omega_dot[2, 0]
             return rhs
-        return rhs_func
+        def rhs_func_point_mass(t, y):
+            rhs = np.zeros(len(self) * 2)
+            theta_1 = y[0]
+            theta_2 = y[1]
+            theta_3 = y[2]
+            omega_1 = y[3]
+            omega_2 = y[4]
+            omega_3 = y[5]
+
+            omega = np.array([[omega_1], [omega_2], [omega_3]])
+
+            M11 = m_1*l_1**2 + m_2*l_1**2 + m_3*l_1**2
+            M12 = m_2*l_1*l_2*np.cos(theta_1 - theta_2) + m_3*l_1*l_2*np.cos(theta_1 - theta_2)
+            M13 = m_3*l_1*l_3*np.cos(theta_1 - theta_3)
+
+            M21 = M12
+            M22 = m_2*l_2**2 + m_3*l_2**2
+            M23 = m_3*l_2*l_3*np.cos(theta_2 - theta_3)
+
+            M31 = M13
+            M32 = M23
+            M33 = m_3*l_3**2
+
+            M = np.array([[M11, M12, M13], [M21, M22, M23], [M31, M32, M33]])
+
+            C11 = m_2*l_1*l_2*omega_2*np.sin(theta_1 - theta_2) + m_3*l_1*l_2*omega_2*np.sin(theta_1 - theta_2) + m_3*l_1*l_3*omega_3*np.sin(theta_1-theta_3)
+            C12 = -m_2*l_1*l_2*(omega_1 - omega_2)*np.sin(theta_1-theta_2) - m_3*l_1*l_2*(omega_1 - omega_2)*np.sin(theta_1-theta_2) + \
+                   m_3*l_2*l_3*omega_3*np.sin(theta_2-theta_3)
+            C13 = m_3*l_1*l_3*(omega_1-omega_3)*np.sin(theta_1-theta_3)
+
+            # This is incorrect in the paper - read from eq (32)
+            C21 = -m_2*l_1*l_2*(omega_1-omega_2)*np.sin(theta_1-theta_2) - m_3*l_1*l_2*(omega_1 - omega_2)*np.sin(theta_1-theta_2)
+            # This is incorrect in the paper - read from eq (32)
+            C22 = -m_2*l_1*l_2*omega_1*np.sin(theta_1-theta_2) - m_3*l_1*l_2*omega_1*np.sin(theta_1-theta_2) + m_3*l_2*l_3*omega_3*np.sin(theta_2-theta_3)
+            C23 = -m_3*l_2*l_3*(omega_2-omega_3)*np.sin(theta_2-theta_3)
+
+            C31 = -m_3*l_1*l_3*(omega_1-omega_3)*np.sin(theta_1-theta_3)
+            C32 = m_3*l_2*l_3*(omega_2-omega_3)*np.sin(theta_2-theta_3)
+            C33 = -m_3*l_1*l_3*omega_1*np.sin(theta_1-theta_3) - m_3*l_2*l_3*omega_2*np.sin(theta_2-theta_3)
+
+            C = np.array([[C11, C12, C13], [C21, C22, C23], [C31, C32, C33]])
+
+            g1 = (m_1 + m_2 + m_3)*l_1*self.g*np.sin(theta_1)
+            g2 = (m_2 + m_3)*l_2*self.g*np.sin(theta_2)
+            g3 = m_3*l_3*self.g*np.sin(theta_3)
+
+            g = np.array([[g1], [g2], [g3]])
+            omega_dot = np.linalg.solve(M, -g - C @ omega)
+
+            rhs[0] = omega_1
+            rhs[1] = omega_2
+            rhs[2] = omega_3
+            rhs[3] = omega_dot[0, 0]
+            rhs[4] = omega_dot[1, 0]
+            rhs[5] = omega_dot[2, 0]
+            return rhs
+
+        if not self.point_mass:
+            return rhs_func
+        else:
+            return rhs_func_point_mass
 
     def get_ode_rhs(self):
         if len(self) == 2:
@@ -184,20 +246,21 @@ class Pendulum:
         self.df = df
         return ode_solution, df
 
-    def calculate_energy(self, solution):
+    def calculate_energy(self):
         l1 = self.linkages[0].l
         l2 = self.linkages[1].l
         l3 = self.linkages[2].l
         m1 = self.linkages[0].m
         m2 = self.linkages[1].m
         m3 = self.linkages[2].m
-
-        theta_1 = solution.y[0, :]
-        theta_2 = solution.y[1, :]
-        theta_3 = solution.y[2, :]
-        omega_1 = solution.y[3, :]
-        omega_2 = solution.y[4, :]
-        omega_3 = solution.y[5, :]
+        if not self.solution:
+            raise AttributeError('Must solve the pendulum before calculating energy')
+        theta_1 = self.solution.y[0, :]
+        theta_2 = self.solution.y[1, :]
+        theta_3 = self.solution.y[2, :]
+        omega_1 = self.solution.y[3, :]
+        omega_2 = self.solution.y[4, :]
+        omega_3 = self.solution.y[5, :]
 
         g = self.g
 
@@ -214,7 +277,9 @@ class Pendulum:
                                 0.5*l2*l3*np.cos(theta_2 - theta_3)*(omega_2*omega_3 + omega_3**2/3))
         mass_3_term_3 = -g*m3*(l1*np.cos(theta_1) + l2*np.cos(theta_2) + 0.5*l3*np.cos(theta_3))
         term3 = mass_3_term_1 + mass_3_term_2 + mass_3_term_3
-        return term1 + term2 + term3
+        energy = term1 + term2 + term3
+        self.df['energy'] = energy
+        return energy
 
     def plot_linkage_position(self, linkage_num, ax=None):
         if not ax:
@@ -237,7 +302,6 @@ class Pendulum:
         return ax
 
     def plot_energy(self):
-        self.df['energy'] = self.calculate_energy(self.solution)
         fig, ax = plt.subplots()
 
         ax.plot(self.df.time, self.df.energy)
@@ -359,16 +423,26 @@ def animate_solution(pendulums):
     return ani
 
 if __name__ == '__main__':
-    linkage_1 = Linkage(1, 1, np.pi / 2, 0)
-    linkage_2 = Linkage(1, 1, np.pi / 2, 0)
-    linkage_3 = Linkage(1, 1, np.pi / 2, 0)
-    pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, 20)
+    linkage_1 = Linkage(1, 1, 1.9*np.pi / 2, 0)
+    linkage_2 = Linkage(1, 1, 1.9*np.pi / 2, 0)
+    linkage_3 = Linkage(1, 1, 1.9*np.pi / 2, 0)
+    pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, 100)
     solution, df = pendulum.solve()
 
     pendulum.plot_all_linkage_variables()
-    pendulum.plot_energy()
+    pendulum.calculate_energy()
+    ax = pendulum.plot_energy()
+    ax.set_ylim([-30, 30])
     ani = animate_solution([pendulum])
     plt.show()
+
+    # pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, 100, point_mass=True)
+    # solution, df = pendulum.solve()
+    #
+    # pendulum.plot_all_linkage_variables()
+    # pendulum.plot_energy()
+    # ani = animate_solution([pendulum])
+    # plt.show()
 
 
 
