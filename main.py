@@ -227,7 +227,7 @@ class Pendulum:
         else:
             raise ValueError(f'Unavailable number of linkages ({len(self)}). Must be 2 or 3')
 
-    def solve(self, method='RK45'):
+    def solve(self, method='RK45', wrap_angles=True):
         y0 = np.array([linkage.theta for linkage in self.linkages] + [linkage.omega for linkage in self.linkages])
         t_bound = (0, self.t_end)
         ode_solution = integrate.solve_ivp(self.get_ode_rhs(), t_bound, y0, method=method, max_step=0.1)
@@ -244,6 +244,14 @@ class Pendulum:
         # df['energy'] = self.calculate_energy(ode_solution)
         self.solution = ode_solution
         self.df = df
+        if wrap_angles:
+            self.df.theta1 = np.fmod(self.df.theta1, np.pi)
+            self.df.theta2 = np.fmod(self.df.theta2, np.pi)
+            self.df.theta3 = np.fmod(self.df.theta3, np.pi)
+
+            self.df.theta1 = np.fmod(self.df.theta1, np.pi)
+            self.df.theta2 = np.fmod(self.df.theta2, np.pi)
+            self.df.theta3 = np.fmod(self.df.theta3, np.pi)
         return ode_solution, df
 
     def calculate_energy(self):
@@ -425,9 +433,9 @@ def animate_solution(pendulums):
 if __name__ == '__main__':
     linkage_1 = Linkage(1, 1, 1.9*np.pi / 2, 0)
     linkage_2 = Linkage(1, 1, 1.9*np.pi / 2, 0)
-    linkage_3 = Linkage(1, 1, 1.9*np.pi / 2, 0)
+    linkage_3 = Linkage(2, 2, 1.9*np.pi / 2, 0)
     pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, 100)
-    solution, df = pendulum.solve()
+    solution, df = pendulum.solve(wrap_angles=False)
 
     pendulum.plot_all_linkage_variables()
     pendulum.calculate_energy()

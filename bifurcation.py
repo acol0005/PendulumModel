@@ -62,13 +62,13 @@ def generate_bifurcation_diagram(pendulums, x_val, y_val, num_processes=os.cpu_c
     if single_valued:
         y_vals = np.array([y_val(df) for df in dfs])
 
-        ax.scatter(x_vals, y_vals, s=5)
+        ax.scatter(x_vals, y_vals, s=1)
     else:
         y_vals = [y_val(df) for df in dfs]
         max_length = max(len(arr) for arr in y_vals)
         y_vals = np.array([np.concatenate([arr, np.ones(max_length - len(arr))*np.nan]) for arr in y_vals])
         for i in range(max_length):
-            ax.scatter(x_vals, y_vals[:, i], s=5, c='cornflowerblue')
+            ax.scatter(x_vals, y_vals[:, i], s=1, c='cornflowerblue')
     return pendulums, ax
 
 
@@ -89,8 +89,8 @@ if __name__ == '__main__':
 
 
     # Sweep initial angular velocity of bars
-    n = 1000
-    t_end = 20
+    n = 200
+    t_end = 50
     # First bar specs
     m1 = np.ones(n)
     l1 = np.ones(n)
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     # Bifurcation diagram for max theta2
     y_vals = get_local_maxima_func('theta2_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals, solved=True, single_valued=False)
-    y_vals_2 = get_local_maxima_func('theta2_deg')
+    y_vals_2 = get_local_minima_func('theta2_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals_2, solved=True, ax=ax, single_valued=False)
     ax.grid()
     ax.set_xlabel('Energy')
