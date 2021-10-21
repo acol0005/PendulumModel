@@ -134,8 +134,8 @@ def distance(df1,df2,time):
     :param time: (float)
     :return: (int) distance
     """
-    array1 = df1.iloc[time*10 + 1].array
-    array2 = df2.iloc[time*10 + 1].array
+    array1 = df1.iloc[time*10 + 1][0:6].array
+    array2 = df2.iloc[time*10 + 1][0:6].array
     distance = np.linalg.norm(array1-array2)
     return(distance)
 
@@ -209,14 +209,16 @@ def lyapunov(CriticalPoints,n,t_end,dim,N,shift):
 if __name__ == '__main__':
     #create parameters to construct the pendulums
     n = 8
-    t_end = 2000
+    t_end = 200
     dim = 6
-    N = 600
-    shift = 0.00001
-    CriticalPoints = [[0 ,0, 0, 0, 0, 0], [np.pi, 0, 0, 0, 0, 0], [0, np.pi, 0, 0, 0, 0], [0, 0, np.pi, 0, 0, 0], [np.pi, np.pi, 0, 0, 0, 0], [np.pi, 0, np.pi, 0, 0, 0],
-                      [0, np.pi, np.pi, 0, 0, 0], [0, np.pi, np.pi, 0, 0, 0]]
+    N = 50
+    shift = 0.000001
+    CriticalPoints = [[0, 0, 0, 0, 0, 0], [0, 0, np.pi, 0, 0, 0], [0, np.pi, 0, 0, 0, 0], [0, np.pi, np.pi, 0, 0, 0],
+                      [np.pi, 0, 0, 0, 0, 0], [np.pi, 0, np.pi, 0, 0, 0], [np.pi, np.pi, 0, 0, 0, 0],
+                      [np.pi, np.pi, np.pi, 0, 0, 0]]
 
     Time_exponents, times_list= lyapunov(CriticalPoints,n,t_end,dim,N,shift)
+    print(Time_exponents)
 
     exponent_1 = [exponents[0] for exponents in Time_exponents]
     exponent_2 = [exponents[1] for exponents in Time_exponents]
@@ -227,15 +229,15 @@ if __name__ == '__main__':
     exponent_7 = [exponents[6] for exponents in Time_exponents]
     exponent_8 = [exponents[7] for exponents in Time_exponents]
 
-    plt.plot(times_list,exponent_1, label = 'Critical Point 1')
-    plt.plot(times_list,exponent_2, label = 'Critical Point 2')
-    plt.plot(times_list,exponent_3, label = 'Critical Point 3')
-    plt.plot(times_list,exponent_4, label = 'Critical Point 4')
-    plt.plot(times_list,exponent_5, label = 'Critical Point 5')
-    plt.plot(times_list,exponent_6, label = 'Critical Point 6')
-    plt.plot(times_list,exponent_7, label = 'Critical Point 7')
-    plt.plot(times_list,exponent_8, label = 'Critical Point 8')
-    plt.title('Estimated Lyapunov Exponents')
+    plt.plot(times_list,exponent_1, label = 'E_1')
+    plt.plot(times_list,exponent_2, label = 'E_2')
+    plt.plot(times_list,exponent_3, label = 'E_3')
+    plt.plot(times_list,exponent_4, label = 'E_4')
+    plt.plot(times_list,exponent_5, label = 'E_5')
+    plt.plot(times_list,exponent_6, label = 'E_6')
+    plt.plot(times_list,exponent_7, label = 'E_7')
+    plt.plot(times_list,exponent_8, label = 'E_8')
+    # plt.title('Estimated Lyapunov Exponents')
     plt.xlabel('Time (s)')
     plt.ylabel('Exponent Value')
     plt.legend()
