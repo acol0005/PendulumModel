@@ -5,8 +5,30 @@ import multiprocessing
 import os
 import time
 import math
+import mpl_toolkits.mplot3d.axes3d as axes3d
 from bifurcation import generate_list_of_pendulums, generate_list_of_linkages, solve_pendulum
 from main import Linkage, Pendulum, animate_solution
+
+def create_n_sphere(dimensions,N,shift):
+    """
+    :param dimensions: (int) no. dimensions of sphere
+    :param N: (int) no. points
+    :param shift: (float), this is the final radius of the sphere
+    :return: () points
+    """
+    norm = np.random.normal
+    normal_deviates = norm(size=(N, dimensions))
+
+    radius = np.sqrt((normal_deviates ** 2).sum(axis=0))
+    points = normal_deviates / radius
+    normalised_points = []
+
+    for point in points:
+        normalised = point/np.linalg.norm(point)*shift
+        normalised_points.append(normalised*shift)
+
+    return(normalised_points)
+
 
 
 def solve_pendulums(pendulums, num_processes=os.cpu_count() - 2):
@@ -24,79 +46,54 @@ def solve_pendulums(pendulums, num_processes=os.cpu_count() - 2):
     return pendulums,dfs
 
 
-def generate_shifted_ICs(first_fiducial_angles, second_fiducial_angles, third_fiducial_angles, omega, shift):
-    """ Generate the initial conditions to create the elipsoid around the central pendulum
-
-    :param first_fiducial_angles: (list) list containing IC's of the first central arm
-    :param second_fiducial_angles: (list) list containing IC's of the second central arm
-    :param third_fiducial_angles: (list) list containing IC's of the third central arm
-    :param omega: (list) starting intial velocities of each arm
-    :param shift: (scalar) shift amount
-    :return: (list) list of shifted angles, (list) list of shifted velocities
+def generate_shifted_ICs(CriticalPoints, shifts):
     """
-    first_shifted_angles = [angle + shift for angle in first_fiducial_angles]
-    second_shifted_angles = [angle + shift for angle in second_fiducial_angles]
-    third_shifted_angles = [angle + shift for angle in third_fiducial_angles]
-    omega1 = omega2 = omega3 = omega
-    omega1[0] = omega2[1] = omega3[2] = shift
-    shifted_angles = [first_shifted_angles, second_shifted_angles, third_shifted_angles]
-    shifted_velocities = [omega1, omega2, omega3]
-    return shifted_angles, shifted_velocities
 
-
-def generate_shifted_links(fiducial_angles, shifted_angles, omega, shifted_velocities, m, l):
-    """ takes central and shifted IC's and generates shifted linkages
-
-    :param fiducial_angles:
-    :param shifted_angles:
-    :param omega:
-    :param shifted_velocities:
-    :param m:
-    :param l:
+    :param CriticalPoints:
+    :param shifts:
     :return:
     """
-    shifted_linkages_1 = generate_list_of_linkages(m, l, shifted_angles[0], omega)
-    shifted_linkages_2 = generate_list_of_linkages(m, l, shifted_angles[1], omega)
-    shifted_linkages_3 = generate_list_of_linkages(m, l, shifted_angles[2], omega)
-
-    first_velocity_shifted = generate_list_of_linkages(m, l, fiducial_angles[0], shifted_velocities[0])
-    second_velocity_shifted = generate_list_of_linkages(m, l, fiducial_angles[0], shifted_velocities[1])
-    third_velocity_shifted = generate_list_of_linkages(m, l, fiducial_angles[0], shifted_velocities[2])
-
-    shifted_first_links = [shifted_linkages_1, first_velocity_shifted]
-    shifted_second_links = [shifted_linkages_2, second_velocity_shifted]
-    shifted_third_links = [shifted_linkages_3, third_velocity_shifted]
-    return shifted_first_links, shifted_second_links, shifted_third_links
+    Shifted_ICs = []
+    count = 1
+    for pendulum in CriticalPoints:
+        pendulums = []
+        for shift in shifts:
+            shifted = [(pend+shif) for pend, shif in zip(pendulum,shift)]
+            pendulums.append(shifted)
+        Shifted_ICs.append(pendulums)
+    return(Shifted_ICs)
 
 
-def generate_shifted_pendulums(shifted_first_links, shifted_second_links, shifted_third_links, fiducial_linkages,
-                               t_end):
-    """takes shifted links and generates the pendulums
+def generate_shifted_pendulums(Shifted_ICs,t_end,m=None,l=None):
+    """
+
+    :param Shifted_ICs: triple nested list: top layer = 8 fiducial groupings, next layer = 100 variations per fiducial, next layer = 6 ICs
     :param t_end:
-    :param shifted_first_links:
-    :param shifted_second_links:
-    :param shifted_third_links:
-    :param fiducial_linkages:
     :return:
     """
-    first_shifted_pendulums = generate_list_of_pendulums(shifted_first_links[0], fiducial_linkages[1],
-                                                         fiducial_linkages[2],
-                                                         1, t_end)
-    second_shifted_pendulums = generate_list_of_pendulums(fiducial_linkages[0], shifted_second_links[0],
-                                                          fiducial_linkages[2], 1, t_end)
-    third_shifted_pendulums = generate_list_of_pendulums(fiducial_linkages[0], fiducial_linkages[1],
-                                                         shifted_third_links[0], 1, t_end)
-    fourth_shifted_pendulums = generate_list_of_pendulums(shifted_first_links[1], fiducial_linkages[1],
-                                                          fiducial_linkages[2],
-                                                          1, t_end)
-    fifth_shifted_pendulums = generate_list_of_pendulums(fiducial_linkages[0], shifted_second_links[1],
-                                                         fiducial_linkages[2], 1, t_end)
-    sixth_shifted_pendulums = generate_list_of_pendulums(fiducial_linkages[0], fiducial_linkages[1],
-                                                         shifted_third_links[1], 1, t_end)
-    return first_shifted_pendulums, second_shifted_pendulums, third_shifted_pendulums, fourth_shifted_pendulums, fifth_shifted_pendulums, sixth_shifted_pendulums
+    m = np.ones(len(Shifted_ICs[0]))
+    l = np.ones(len(Shifted_ICs[0]))
+    Pendulums = []
+
+    for fiducial in Shifted_ICs:
+        first_angles = [arm[0] for arm in fiducial]
+        second_angles = [arm[1] for arm in fiducial]
+        third_angles = [arm[2] for arm in fiducial]
+        first_velocities = [arm[3] for arm in fiducial]
+        second_velocities = [arm[4] for arm in fiducial]
+        third_velocities = [arm[5] for arm in fiducial]
+
+        first_linkages = generate_list_of_linkages(m,l,first_angles,first_velocities)
+        second_linkages = generate_list_of_linkages(m,l,second_angles,second_velocities)
+        third_linkages = generate_list_of_linkages(m,l,third_angles,third_velocities)
+
+        shifted_pendulums = generate_list_of_pendulums(first_linkages,second_linkages,third_linkages,1,t_end)
+        Pendulums.append(shifted_pendulums)
+
+    return Pendulums
 
 
-def generate_fiducial_links(first_fiducial_angles, second_fiducial_angles, third_fiducial_angles, omega, m, l):
+def generate_fiducial_links(CriticalPoints,omega, m, l):
     """
     :param first_fiducial_angles: the central initial conditions (critical points)
     :param second_fiducial_angles:
@@ -104,6 +101,10 @@ def generate_fiducial_links(first_fiducial_angles, second_fiducial_angles, third
     :param omega:
     :return: list of pendulums
     """
+    first_fiducial_angles = [angle[0] for angle in CriticalPoints]
+    second_fiducial_angles = [angle[1] for angle in CriticalPoints]
+    third_fiducial_angles = [angle[2] for angle in CriticalPoints]
+
     fiducial_linkages_1 = generate_list_of_linkages(m, l, first_fiducial_angles, omega)
     fiducial_linkages_2 = generate_list_of_linkages(m, l, second_fiducial_angles, omega)
     fiducial_linkages_3 = generate_list_of_linkages(m, l, third_fiducial_angles, omega)
@@ -118,28 +119,28 @@ def generate_fiducial_pendulums(fiducial_linkages, t_end):
     return (fiducial_pendulums)
 
 
-def group(fiducials, first_shifted, second_shifted,third_shifted,fourth_shifted,fifth_shifted,sixth_shifted):
+def group(fiducials, Shifted_Pendulums):
     """groups pendulums with their fiducial pendulum for analysis"""
-    df_groups = list(map(list, zip(fiducials, first_shifted, second_shifted, third_shifted, fourth_shifted, fifth_shifted, sixth_shifted)))
+    df_groups = list(map(list, zip(fiducials, Shifted_Pendulums)))
     return df_groups
 
-def principle_distance(df1,df2):
+
+def distance(df1,df2,time):
     """calculates distance between two pendulum arms (in phase space?) at the final time.
 
 
     :param df1: (pandas DataFrame) first pandas series taken from a pendulum dataframe
     :param df2: (pandas DataFrame) second pandas series taken from a pendulum dataframe
-    :return: (float) distance
+    :param time: (float)
+    :return: (int) distance
     """
-    distances = []
-    for i in range(6):
-        distances.append(abs(df1.iloc[len(df1)-1][i] - df2.iloc[len(df2)-1][i]))
-    dist = max(distances)
-    # print('distance is: ', dist)
-    return dist
+    array1 = df1.iloc[time*10 + 1][0:6].array
+    array2 = df2.iloc[time*10 + 1][0:6].array
+    distance = np.linalg.norm(array1-array2)
+    return(distance)
 
 
-def calculate_lyapunov(dfs_list,t_final,shift):
+def calculate_lyapunov(Shifted_Pendulums,Fiducial_Pendulums,time_end,shift):
     """
 
     :param dfs_list: list of lists; nested list is of dataframes with similar IC's
@@ -147,67 +148,111 @@ def calculate_lyapunov(dfs_list,t_final,shift):
     :param shift: (float)
     :return:
     """
-    m = len(dfs_list)
     exponents = []
-    for df in dfs_list[1:m+1]:
-        numerator = principle_distance(df,dfs_list[0])
-        if numerator != 0.0:
-            exponent = (1/t_final)*math.log2(numerator/shift)
-            exponents.append(exponent)
-        else:
-            exponents.append('zero distance')
+    for pendulum in Fiducial_Pendulums:
+        max_dist = 0
+        index = Fiducial_Pendulums.index(pendulum)
+        for shifted_pendulum in Shifted_Pendulums[index]:
+            dist = distance(pendulum.df,shifted_pendulum.df,time_end)
+            if dist>max_dist:
+                max_dist = dist
+        exponent = (1/t_end)*math.log2(max_dist/shift)      #note that the initial distance has been normalised to 1 in all cases
+        exponents.append(exponent)
     return(exponents)
+
+def lyapunov(CriticalPoints,n,t_end,dim,N,shift):
+    """
+
+    :param CriticalPoints:
+    :param n:
+    :param t_end:
+    :param dim:
+    :param N:
+    :return:
+    """
+
+    m = np.ones(n)
+    l = np.ones(n)
+    omega = np.zeros(n)
+    # Generate the 8 fiducial(central) pendulums stored in a list
+    fiducial_linkages = generate_fiducial_links(CriticalPoints, omega, m, l)
+    fiducial_pendulums = generate_fiducial_pendulums(fiducial_linkages, t_end)
+    fiducial_pendulums, fiducial_dfs = solve_pendulums(fiducial_pendulums)
+
+    # Create shifts by generating points on 6 dimensional unit sphere
+    shifts = create_n_sphere(dim, N,shift)  # list of length 100, with inner lists of length 6
+
+    Shifted_ICs = generate_shifted_ICs(CriticalPoints, shifts)
+
+    Shifted_Pendulums = generate_shifted_pendulums(Shifted_ICs, t_end)
+    Solved_Shifted_Pendulums = []
+    for Pendulum_group in Shifted_Pendulums:
+        t00 = time.time()
+        print('solving pendulum group:', Shifted_Pendulums.index(Pendulum_group)+1)
+        pendulums, dfs = solve_pendulums(Pendulum_group)
+        Solved_Shifted_Pendulums.append(pendulums)
+        print(f'took {time.time() - t00:.2f}s')
+
+    times_list = [i for i in range(t_end)]
+
+    Time_exponents = []
+    for time_ in times_list:
+        print('calculating exponent for time: ', time_)
+        t0 = time.time()
+        lyapunov_exponents = calculate_lyapunov(Solved_Shifted_Pendulums, fiducial_pendulums, time_,shift)
+        Time_exponents.append(lyapunov_exponents)
+        print(f'took {time.time() - t0:.2f}s')
+
+    return(Time_exponents, times_list)
 
 
 if __name__ == '__main__':
     #create parameters to construct the pendulums
     n = 8
-    t_end = 2000
-    m = np.ones(n)
-    l = np.ones(n)
-    omega = np.zeros(n)
-    shift = 0.01 #The shift in angular velocity applied to each pendulum arm
+    t_end = 200
+    dim = 6
+    N = 50
+    shift = 0.000001
+    CriticalPoints = [[0, 0, 0, 0, 0, 0], [0, 0, np.pi, 0, 0, 0], [0, np.pi, 0, 0, 0, 0], [0, np.pi, np.pi, 0, 0, 0],
+                      [np.pi, 0, 0, 0, 0, 0], [np.pi, 0, np.pi, 0, 0, 0], [np.pi, np.pi, 0, 0, 0, 0],
+                      [np.pi, np.pi, np.pi, 0, 0, 0]]
 
-    CriticalPoints = [[0 ,0, 0], [np.pi, 0, 0], [0, np.pi, 0], [0, 0, np.pi], [np.pi, np.pi, 0],[np.pi, 0, np.pi],
-                      [0, np.pi, np.pi], [0, np.pi, np.pi]]
+    Time_exponents, times_list= lyapunov(CriticalPoints,n,t_end,dim,N,shift)
+    print(Time_exponents)
 
+    exponent_1 = [exponents[0] for exponents in Time_exponents]
+    exponent_2 = [exponents[1] for exponents in Time_exponents]
+    exponent_3 = [exponents[2] for exponents in Time_exponents]
+    exponent_4 = [exponents[3] for exponents in Time_exponents]
+    exponent_5 = [exponents[4] for exponents in Time_exponents]
+    exponent_6 = [exponents[5] for exponents in Time_exponents]
+    exponent_7 = [exponents[6] for exponents in Time_exponents]
+    exponent_8 = [exponents[7] for exponents in Time_exponents]
 
-    first_fiducial_angles = [item[0] for item in CriticalPoints]
-    second_fiducial_angles = [item[1] for item in CriticalPoints]
-    third_fiducial_angles = [item[2] for item in CriticalPoints]
-    fiducial_angles = [first_fiducial_angles, second_fiducial_angles,third_fiducial_angles]
-
-    #Generate the 8 fiducial(central) pendulums stored in a list
-    fiducial_linkages = generate_fiducial_links(first_fiducial_angles, second_fiducial_angles, third_fiducial_angles, omega, m, l)
-    fiducial_pendulums = generate_fiducial_pendulums(fiducial_linkages, t_end)
-
-
-    shifted_angles, shifted_velocities = generate_shifted_ICs(first_fiducial_angles,second_fiducial_angles,third_fiducial_angles,omega,shift)
-    shifted_first_links, shifted_second_links, shifted_third_links = generate_shifted_links(fiducial_angles, shifted_angles, omega, shifted_velocities, m, l)
-    first_shifted_pendulums, second_shifted_pendulums, third_shifted_pendulums, fourth_shifted_pendulums, fifth_shifted_pendulums, sixth_shifted_pendulums = generate_shifted_pendulums(shifted_first_links, shifted_second_links, shifted_third_links, fiducial_linkages,
-                               t_end)
-
-    fiducial_pendulums, dfs = solve_pendulums(fiducial_pendulums)
-    first_shifted_pendulums, first_dfs = solve_pendulums(first_shifted_pendulums)
-    second_shifted_pendulums, second_dfs = solve_pendulums(second_shifted_pendulums)
-    third_shifted_pendulums, third_dfs = solve_pendulums(third_shifted_pendulums)
-    fourth_shifted_pendulums, fourth_dfs = solve_pendulums(fourth_shifted_pendulums)
-    fifth_shifted_pendulums, fifth_dfs = solve_pendulums(fifth_shifted_pendulums)
-    sixth_shifted_pendulums, sixth_dfs = solve_pendulums(sixth_shifted_pendulums)
-
-    groups_dfs = group(dfs, first_dfs, second_dfs, third_dfs, fourth_dfs, fifth_dfs, sixth_dfs)
-    groups_pendulums = group(fiducial_pendulums,first_shifted_pendulums,second_shifted_pendulums,third_shifted_pendulums,fourth_shifted_pendulums,fifth_shifted_pendulums,sixth_shifted_pendulums)
-    #groups is a list of lists
+    plt.plot(times_list,exponent_1, label = 'E_1')
+    plt.plot(times_list,exponent_2, label = 'E_2')
+    plt.plot(times_list,exponent_3, label = 'E_3')
+    plt.plot(times_list,exponent_4, label = 'E_4')
+    plt.plot(times_list,exponent_5, label = 'E_5')
+    plt.plot(times_list,exponent_6, label = 'E_6')
+    plt.plot(times_list,exponent_7, label = 'E_7')
+    plt.plot(times_list,exponent_8, label = 'E_8')
+    # plt.title('Estimated Lyapunov Exponents')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Exponent Value')
+    plt.legend()
+    plt.show()
 
 
-    # for pendulum in groups_pendulums[6]:
-    #     pendulum.plot_all_linkage_variables()
-    #     plt.show()
 
-    #
-    for group in groups_dfs:
-        exponents = calculate_lyapunov(group,t_end,shift)
-        print(exponents)
+
+
+
+
+
+
+
+
 
 
 #notes to self --> find a way to display the graphs of angle vs time to check if they're all starting in the correct position; if they are then can just ignore the really wacky plots/animations and carry on
