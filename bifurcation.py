@@ -6,7 +6,7 @@ import os
 import time
 import math
 
-from main import Linkage, Pendulum, animate_solution
+from main import Linkage, Pendulum, animate_solution, wrap_to_180
 
 
 def generate_list_of_linkages(masses, lengths, initial_angles, initial_angular_velocities):
@@ -75,41 +75,42 @@ def generate_bifurcation_diagram(pendulums, x_val, y_val, num_processes=os.cpu_c
 
 if __name__ == '__main__':
     def get_maximum_of_column_func(column):
-        return lambda df: df[column].max() % 360
+        return lambda df: wrap_to_180(df[column]).max()
 
     def get_minimum_of_column_func(column):
-        return lambda df: math.fmod(df[column].min(), 360)
+        return lambda df: wrap_to_180(df[column]).min()
 
     def get_local_maxima_func(column):
-        return lambda df: df.loc[(df[column].shift(1) < df[column]) & (df[column].shift(-1) < df[column]), column] % 360
+        return lambda df: wrap_to_180(df.loc[(df[column].shift(1) < df[column]) & (df[column].shift(-1) < df[column]), column])
 
     def get_local_minima_func(column):
-        return lambda df: df.loc[(df[column].shift(1) > df[column]) & (df[column].shift(-1) > df[column]), column].mod(360)
+        return lambda df: wrap_to_180(df.loc[(df[column].shift(1) > df[column]) & (df[column].shift(-1) > df[column]), column])
 
 
 
     # Sweep initial angular velocity of bars
-    n = 200
-    t_end = 50
+    n = 4000
+    t_end = 150
+    max_theta = np.pi
     # First bar specs
     m1 = np.ones(n)
     l1 = np.ones(n)
-    th1 = np.zeros(n)
-    omega1 = np.linspace(np.deg2rad(0), np.pi / 3, n)
+    th1 = np.linspace(np.deg2rad(0), max_theta, n)
+    omega1 = np.zeros(n)
     linkages_1 = generate_list_of_linkages(m1, l1, th1, omega1)
 
     # Second bar specs
     m2 = np.ones(n)
     l2 = np.ones(n)
-    th2 = np.zeros(n)
-    omega2 = np.linspace(np.deg2rad(0), np.pi / 3, n)
+    th2 = np.linspace(np.deg2rad(0), max_theta, n)
+    omega2 = np.zeros(n)
     linkages_2 = generate_list_of_linkages(m2, l2, th2, omega2)
 
     # Second bar specs
     m3 = np.ones(n)
     l3 = np.ones(n)
-    th3 = np.zeros(n)
-    omega3 = np.linspace(np.deg2rad(0), np.pi / 3, n)
+    th3 = np.linspace(np.deg2rad(0), max_theta, n)
+    omega3 = np.zeros(n)
     linkages_3 = generate_list_of_linkages(m3, l3, th3, omega3)
 
     pendulums = generate_list_of_pendulums(linkages_1, linkages_2, linkages_3, 1, t_end)
@@ -150,12 +151,15 @@ if __name__ == '__main__':
     # Bifurcation diagram for max theta1
     y_vals = get_local_maxima_func('theta1_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals, single_valued=False)
-    y_vals_2 = get_local_maxima_func('theta1_deg')
+    print(f'Bifurcation diagram took {time.time() - t0:.2f}s')
+    y_vals_2 = get_local_minima_func('theta1_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals_2, solved=True, ax=ax, single_valued=False)
     ax.grid()
     ax.set_xlabel('Energy')
     ax.set_ylabel('Max Theta for 1st Linkage (deg)')
-    ax.set_title('Bifurcation Diagram for Theta3_0')
+    ax.set_title('Bifurcation Diagram for Theta 1 Max Angle')
+    fig = ax.get_figure()
+    fig.savefig('Th1_Bifurcation.pdf')
 
     # Bifurcation diagram for max theta2
     y_vals = get_local_maxima_func('theta2_deg')
@@ -166,21 +170,21 @@ if __name__ == '__main__':
     ax.set_xlabel('Energy')
     ax.set_ylabel('Max Theta for 2nd Linkage (deg)')
     ax.set_title('Bifurcation Diagram for Theta 2 Max Angle')
+    fig = ax.get_figure()
+    fig.savefig('Th2_Bifurcation.pdf')
 
     # Bifurcation diagram for max theta3
     y_vals = get_local_maxima_func('theta3_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals, solved=True, single_valued=False)
-    y_vals_2 = get_local_maxima_func('theta3_deg')
+    y_vals_2 = get_local_minima_func('theta3_deg')
     pendulums, ax = generate_bifurcation_diagram(pendulums, x_vals, y_vals_2, solved=True, ax=ax, single_valued=False)
     ax.grid()
     ax.set_xlabel('Energy')
     ax.set_ylabel('Max Theta for 3rd Linkage (deg)')
     ax.set_title('Bifurcation Diagram for Theta 3 Max Angle')
+    fig = ax.get_figure()
+    fig.savefig('Th3_Bifurcation.pdf')
 
-
-
-
-    print(f'Bifurcation diagram took {time.time() - t0:.2f}s')
 
     pendulums[int(n/4)].plot_all_linkage_variables()
     pendulums[int(n / 2)].plot_all_linkage_variables()

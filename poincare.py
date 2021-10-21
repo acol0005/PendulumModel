@@ -6,7 +6,8 @@ import multiprocessing
 import os
 import time
 
-from main import Linkage, Pendulum, animate_solution
+from main import Linkage, Pendulum, animate_solution, wrap_to_180
+
 
 
 def generate_poincare_section(pendulum,admissable_vals, x_vals, y_vals, solved=False):
@@ -42,68 +43,52 @@ if __name__ == '__main__':
         return df
 
     def get_theta3(df):
-        return np.fmod(df.theta3_deg, 360)
+        # return np.fmod(df.theta3_deg, 360)
+        return wrap_to_180(df.theta3_deg)
 
     def get_omega3(df):
         return df.omega3_deg
 
     def get_theta2(df):
-        return np.fmod(df.theta2_deg, 360)
+        # return np.fmod(df.theta2_deg, 360)
+        return wrap_to_180(df.theta2_deg)
 
     def get_omega2(df):
         return df.omega2_deg
 
-    linkage_1 = Linkage(1, 1, 0, 0)
-    linkage_2 = Linkage(1, 1, 0, 0)
-    linkage_3 = Linkage(1, 1, np.pi/2, 0)
-    pendulum_1 = Pendulum([linkage_1, linkage_2, linkage_3], 1, MAX_TIME)
-    t0 = time.time()
-    pendulum_1, ax1 = generate_poincare_section(pendulum_1, get_section, get_theta3, get_omega3)
-    print(f'First Poincare diagram took {time.time() - t0:.2f}s')
-    ax1.set_title(f'Poincare at Lowest Energy = {pendulum_1.calculate_energy()[0]}')
-    ax1.set_xlabel('Theta 3')
-    ax1.set_ylabel('Omega 3')
+    def generate_poincare_at_energy_level(th1, th2, th3):
+        linkage_1 = Linkage(1, 1, th1, 0)
+        linkage_2 = Linkage(1, 1, th2, 0)
+        # linkage_3 = Linkage(1, 1, th3, 0.13)
+        linkage_3 = Linkage(1, 1, th3, 0)
+        pendulum = Pendulum([linkage_1, linkage_2, linkage_3], 1, MAX_TIME)
+        t0 = time.time()
+        pendulum, ax = generate_poincare_section(pendulum, get_section, get_theta3, get_omega3)
+        print(f'Poincare diagram took {time.time() - t0:.2f}s')
+        ax.set_title(f'Poincare at E = {pendulum.calculate_energy()[0]:.2f}')
+        ax.set_xlabel('Theta 3')
+        ax.set_ylabel('Omega 3')
+        ax.grid()
+        fig = ax.get_figure()
+        fig.savefig(f'E{pendulum.calculate_energy()[0]:.2f}_Th3.pdf')
 
-    pendulum_1, ax1 = generate_poincare_section(pendulum_1, get_section, get_theta2, get_omega2, solved=True)
-    ax1.set_title(f'Poincare at Lowest Energy = {pendulum_1.calculate_energy()[0]}')
-    ax1.set_xlabel('Theta 2')
-    ax1.set_ylabel('Omega 2')
+        pendulum, ax = generate_poincare_section(pendulum, get_section, get_theta2, get_omega2, solved=True)
+        ax.set_title(f'Poincare at E = {pendulum.calculate_energy()[0]:.2f}')
+        ax.set_xlabel('Theta 2')
+        ax.set_ylabel('Omega 2')
+        ax.grid()
+        fig = ax.get_figure()
+        fig.savefig(f'E{pendulum.calculate_energy()[0]:.2f}_Th2.pdf')
 
-    pendulum_1.plot_all_linkage_variables()
+        fig, axs = pendulum.plot_all_linkage_variables()
+        fig.suptitle(f'Linkage Variables at E = {pendulum.calculate_energy()[0]:.2f}')
+        return pendulum, ax
 
-    linkage_1 = Linkage(1, 1, 0, 0)
-    linkage_2 = Linkage(1, 1, np.pi/2, 0)
-    linkage_3 = Linkage(1, 1, np.pi/2, 0)
-    pendulum_2 = Pendulum([linkage_1, linkage_2, linkage_3], 1, MAX_TIME)
-    t0 = time.time()
-    pendulum_2, ax2 = generate_poincare_section(pendulum_2, get_section, get_theta3, get_omega3)
-    print(f'Second Poincare diagram took {time.time() - t0:.2f}s')
-    ax2.set_title(f'Poincare at Middle Energy Level = {pendulum_2.calculate_energy()[0]}')
-    ax2.set_xlabel('Theta 3')
-    ax2.set_ylabel('Omega 3')
-
-    pendulum_2, ax2 = generate_poincare_section(pendulum_2, get_section, get_theta2, get_omega2, solved=True)
-    ax2.set_title(f'Poincare at Middle Energy = {pendulum_2.calculate_energy()[0]}')
-    ax2.set_xlabel('Theta 2')
-    ax2.set_ylabel('Omega 2')
-    pendulum_2.plot_all_linkage_variables()
-
-    linkage_1 = Linkage(1, 1, np.pi/2, 0)
-    linkage_2 = Linkage(1, 1, np.pi/2, 0)
-    linkage_3 = Linkage(1, 1, np.pi/2, 0)
-    pendulum_3 = Pendulum([linkage_1, linkage_2, linkage_3], 1, MAX_TIME)
-    t0 = time.time()
-    pendulum_3, ax3 = generate_poincare_section(pendulum_3, get_section, get_theta3, get_omega3)
-    print(f'Third Poincare diagram took {time.time() - t0:.2f}s')
-    ax3.set_title(f'Poincare at Highest Energy Level = {pendulum_3.calculate_energy()[0]}')
-    ax3.set_xlabel('Theta 3')
-    ax3.set_ylabel('Omega 3')
-
-    pendulum_3, ax3 = generate_poincare_section(pendulum_3, get_section, get_theta2, get_omega2, solved=True)
-    ax3.set_title(f'Poincare at Highest Energy = {pendulum_3.calculate_energy()[0]}')
-    ax3.set_xlabel('Theta 2')
-    ax3.set_ylabel('Omega 2')
-    pendulum_3.plot_all_linkage_variables()
-    plt.show()
+    initial_thetas = [[0, 0, 0], [0, 0, np.pi], [0, np.pi, 0], [0, np.pi, np.pi], [np.pi, 0, 0]]
+    initial_thetas = np.linspace(0.01, np.pi/2, 5)
+    print(initial_thetas)
+    # for theta in initial_thetas:
+    #     generate_poincare_at_energy_level(theta.item(), theta.item(), theta.item())
+    # plt.show()
 
 
